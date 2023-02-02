@@ -1,6 +1,5 @@
 import pandas as pd
 import scipy as sp
-import numpy as np
 
 from sklearn.preprocessing import OrdinalEncoder
 from sklearn.impute import SimpleImputer
@@ -39,16 +38,14 @@ def dfPerform(df,type):
     cols_withNa=[]
     # instantiate the SimpleImputer to replace the null values
     impute=SimpleImputer(strategy="median",fill_value="median")
-    
     for col in df.columns:
-        average=df[col].mean()
         # check if a column is null
-        if df[col].isna().sum() >1 and df[col].dtype in ["int64","float64"]:
+        if df[col].isna().sum() >1:
             # append the column with null values
             cols_withNa.append(col)
-            df[col].replace(np.nan,average)
-    imputed_cols=pd.DataFrame(impute.fit_transform(df[cols_withNa]))
-    imputed_cols.columns=cols_withNa
+            # impute them
+            imputed_cols=pd.DataFrame(impute.fit_transform(df[cols_withNa]))
+            imputed_cols.columns=cols_withNa
 
     # drop columns with null values  
     df.drop(cols_withNa,axis=1,inplace=True)
@@ -72,80 +69,70 @@ x=real_df.drop(["Survived"],axis=1)
 print(f"Training data columns is {x.columns}")
 
 # update the test columns to match the training columns
-x_testy= dfPerform(x_test,type="test")
+x_test= dfPerform(x_test,type="test")
+# drop these two columns as they are not in the test data
+x_test=x_test.drop(["PassengerId","SibSp"],axis=1)
 
+print(f"Test data columns is {x_test.columns}")
 
 
 # split the data
-x_train,x_valid,y_train,y_valid=train_test_split(x,y,train_size=0.8,test_size=0.2,random_state=0)
+x_train,x_valid,y_train,y_valid=train_test_split(x,y,train_size=0.8,test_size=0.2,random_state=1)
 
-
-x_testz=x_testy[x_valid.columns]
-
-for col in x_testz.columns:
-    if x_testz[col].isna().sum()>1:
-        print("We have some null values")
-    else:
-        print("We do not have null values")
 
 # now we have the comprehensive dataset that we would use to train our ensembling model
 # instantiate the different models
 
-
-def models(mode):
-    mode.fit(x,y)
-    # get some predictions
-    predictions=mode.predict(x_testz.head(179))
-    predictions=pd.DataFrame(predictions,columns=["Survived"])
-    new_preds=predictions["Survived"].apply(lambda x: 1 if x >=0.5 else 0)
-    corr=new_preds.corr(y_valid,method="pearson")
-    print(f"The Correlation is {corr}")
-    print(new_preds)
-    print(y_valid)
-    coore,pval=sp.stats.pearsonr(new_preds,y_valid)
-    print(coore)
-    return coore
 # lets start with XGBOOST
 xgb=XGBRegressor(n_estimators=100)
+xgb.fit(x_train,y_train)
 
-XGBoost=models(xgb)
-
-print(f" the XGBOOST correlation is{XGBoost}")
-
+# get some predictions
+predictions=xgb.predict(x_valid)
+predictions=pd.DataFrame(predictions,columns=["Survived"])
+new_preds=predictions["Survived"].apply(lambda x: 1 if x >=0.5 else 0)
+corr=new_preds.corr(y_valid,method="pearson")
+print(f"The Correlation is {corr}")
+print(new_preds)
+print(y_valid)
+coore,pval=sp.stats.pearsonr(new_preds,y_valid)
+print(coore)
 # lets try it with RandomForests
-# rf=RandomForestRegressor(n_estimators=200,random_state=0)
+rf=RandomForestRegressor(n_estimators=200,random_state=0)
 
-# rf.fit(x,y)
-# predictions=rf.predict(x_testz.head(179))
-# predictions=pd.DataFrame(predictions,columns=["Survived"])
-# new_preds=predictions["Survived"].apply(lambda x: 1 if x >=0.5 else 0)
-# corr=new_preds.corr(y_valid,method="pearson")
-# print(f"The Correlation is {corr}")
-# print(new_preds)
-# print(y_valid)
-# coore,pval=sp.stats.pearsonr(new_preds,y_valid)
-# print(coore)
+rf.fit(x_train,y_train)
+predictions=rf.predict(x_valid)
+mae=mean_absolute_error(y_valid,predictions)
+print(f"The MAE is {mae}")
+predictions=pd.DataFrame(predictions,columns=["Survived"])
+new_preds=predictions["Survived"].apply(lambda x: 1 if x >=0.5 else 0)
 
-# print(f"The RandomForest correlation is {}")
+corr=new_preds.corr(y_valid,method="pearson")
+print(f"The Correlation is {corr}")
+print(new_preds)
+print(y_valid)
+coore,pval=sp.stats.pearsonr(new_preds,y_valid)
+print(coore)
 
-# lets try with logistic regression
-x_testm=x_testy[x_valid.columns]
-for colo in x_testm.columns:
-    x_testm.replace(" ",np.nan)
-    if x_testm[colo].isna().sum()>1:
-        print("me ni fala")
-print(x_valid)
-lr=LogisticRegression(random_state=0)
+print(f"The train columns are{x_train.columns}")
+print(x_test.columns)
+x_test=x_test[x_valid.columns]
+x_test.dropna(axis=0,inplace=True)
+print(x_test)
+lr=LogisticRegression()
 
 lr.fit(x,y)
 
-preds= lr.predict(x_testm)
-Logist=sp.stats.pearsonr(preds,y_valid)
-print(f"The Logistic Regression correlation is {Logist}")
+preds=lr.predict(x_test.head(179))
 
+# preds=pd.DataFrame(preds)
+
+corr=sp.stats.pearsonr(preds,y_valid)
+
+print(f"The correlation in LR is {corr}")
 
 # store both models in an array
-model_Arr=[xgb]
+model_Arr=[xgb,rf]
 
 def getScores(model):
     # now get the various errors using cross validation scores
