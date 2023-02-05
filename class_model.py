@@ -10,6 +10,7 @@ from xgboost import XGBClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import mean_absolute_error
 from sklearn.preprocessing import OrdinalEncoder
+from sklearn.model_selection import cross_val_score
 
 
 from matplotlib import pyplot as plt
@@ -28,10 +29,6 @@ df_test=pd.read_csv("test.csv")
 # the code below initializes some objects
 impute=SimpleImputer(missing_values=np.nan,strategy="constant")
 
-# logistic regression model
-lr=LogisticRegression()
-
-# Random Forest Model
 
 
 # function that will yield a definitive dataframe for training
@@ -111,7 +108,9 @@ def FinalDF(df):
 
 
 this_df=FinalDF(df=df_train)
+this_df.dropna(axis=0,inplace=True)
 test_df=FinalDF(df=df_test)
+test_df.dropna(axis=0,inplace=True)
 
 # predictor variables dataframe
 x=this_df.drop(["Survived","Sex"],axis=1)
@@ -132,38 +131,50 @@ x_train,x_test,y_train,y_test=train_test_split(x,y,train_size=0.8,test_size=0.2,
 
 
 # the function below trains and tests the model accuracy
-def modelStuff(n):
+def modelStuff():
     
+    lr=LogisticRegression(max_iter=2000)
+
     # logistic regression
-    # lr.fit(X=x,y=y)
-    # predictions=lr.predict(X=test_df)
+    print(f"The Ytest shape is {y_test.shape}")
+    lr.fit(X=x_train,y=y_train)
+    predictions=lr.predict(X=x_test)
     # perform correlation in the predictions and the real value
-    # corr,p_value=sp.stats.pearsonr(y_test,predictions)
-    # print(f"The correlation for the Logistic Regression Model is {corr}")
+    corr,p_value=sp.stats.pearsonr(y_test,predictions)
+    print(f"The correlation for the Logistic Regression Model is {corr}")
+    cv=cross_val_score(estimator=lr,X=x,y=y,cv=5)
+    print("The accuracy is:",cv.mean())
 
     # random forests
-    rf=RandomForestClassifier(n_estimators=n)
-    rf.fit(X=x,y=y)
-    rf_pred=rf.predict(test_df)
+    rf=RandomForestClassifier(n_estimators=500,random_state=0)
+    rf.fit(X=x_train,y=y_train)
+    rf_pred=rf.predict(x_test)
     rf_pred=pd.DataFrame(rf_pred)
     new_df=pd.concat([rf_pred,y_test],axis=1,join='inner')
     new_df.to_csv("output.csv")
     corr,pval=sp.stats.pearsonr(y_test,rf_pred)
-    print(f"The correlation for the Random Forest Model at {n} estimators is {corr}")
+    print(f"The correlation for the Random Forest Model at  250 est is {corr}")
+    cv1=cross_val_score(estimator=rf,X=x,y=y,cv=5)
+    print(f"The accuracy for the random forests is  {cv1.mean()}")
 
-    HXGB=HistGradientBoostingClassifier(n_estimators=n,learning_rate=5,early_stopping=5)
-    HXGB.fit(x,y)
-    preds=HXGB.predict(test_df)
+    # gradient booster
+    HXGB=HistGradientBoostingClassifier()
+    HXGB.fit(x_train,y_train)
+    preds=HXGB.predict(x_test)
     corr,pval=sp.stats.pearsonr(y_test,preds)
     print(f"The correlation for the Gradient Booster is {corr}")
+    cv2=cross_val_score(estimator=HXGB,X=x,y=y,cv=5)
+    print(f"The accuracy for the Gradient booster is {cv2.mean()}")
 
-    xgb=XGBClassifier(n_estimators=n,random_state=0)
+    xgb=XGBClassifier()
     xgb.fit(X=x_train,y=y_train)
     predictions=xgb.predict(X=x_test)
     mae=mean_absolute_error(y_true=y_test,y_pred=predictions)
     print(f"The mae is {mae}")
     f_score,p_value=sp.stats.pearsonr(y_test,predictions)
-    print(f"The correlation for the XGB model at {n} estimators is :",f_score)
+    print(f"The correlation for the XGB model at  is :",f_score)
+    cv3=cross_val_score(estimator=xgb,X=x,y=y,cv=5)
+    print(f"The accuracy for the XGB is  {cv3.mean()}")
 
 
-modelStuff(500)
+modelStuff()
