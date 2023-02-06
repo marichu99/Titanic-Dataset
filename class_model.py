@@ -24,6 +24,8 @@ print(df_train.columns)
 
 # get the test data
 df_test=pd.read_csv("test.csv")
+print(f"The shape of the test is {df_test}")
+df_test.to_csv("test1.csv")
 
 
 # the code below initializes some objects
@@ -33,10 +35,15 @@ impute=SimpleImputer(missing_values=np.nan,strategy="constant")
 
 # function that will yield a definitive dataframe for training
  
-def FinalDF(df):
+def FinalDF(df,type):
     def performDF(dataF):
         # columns to drop
-        cols_to_drop=["Cabin","Ticket","Name"]
+        # dont drop Passenger Id for test data
+        if type=="train":
+            cols_to_drop=["Cabin","Ticket","Name","PassengerId"]
+        elif type=="test":
+            cols_to_drop=["Cabin","Ticket","Name"]
+            
         dataF.drop(cols_to_drop,axis=1,inplace=True)
         print(dataF.columns)
         # select the features with objects as datatypes
@@ -102,23 +109,23 @@ def FinalDF(df):
     for cols in this_df.columns:
             this_df[cols].astype("float64")
     print("the train df columns are")
-    print(this_df.columns)
+    print(this_df)
     return this_df
 
-
-
-this_df=FinalDF(df=df_train)
+# training data
+this_df=FinalDF(df=df_train,type="train")
 this_df.dropna(axis=0,inplace=True)
-test_df=FinalDF(df=df_test)
+
+# test data
+test_df=FinalDF(df=df_test,type="test")
+surv_col=df_test["PassengerId"]
 test_df.dropna(axis=0,inplace=True)
-
+print(test_df.shape)
 # predictor variables dataframe
-x=this_df.drop(["Survived","Sex"],axis=1)
-
+x=this_df.drop(["Survived"],axis=1)
 
 test_df=test_df[x.columns]
 print("The test Data is")
-pd.DataFrame(test_df).to_csv("output.csv")
 
 print(test_df)
 
@@ -146,22 +153,32 @@ def modelStuff():
     print("The accuracy is:",cv.mean())
 
     # random forests
-    rf=RandomForestClassifier(n_estimators=500,random_state=0)
-    rf.fit(X=x_train,y=y_train)
-    rf_pred=rf.predict(x_test)
-    rf_pred=pd.DataFrame(rf_pred)
-    new_df=pd.concat([rf_pred,y_test],axis=1,join='inner')
-    new_df.to_csv("output.csv")
-    corr,pval=sp.stats.pearsonr(y_test,rf_pred)
+    print(x.shape, y.shape ,x_test.shape)
+    rf=RandomForestClassifier(n_estimators=250,random_state=0)
+    rf.fit(X=x,y=y)
+    rf_pred=rf.predict(test_df)
+    rf_pred=pd.DataFrame(rf_pred,columns=["Survived"])
+    rf_pred["PassengerID"]=surv_col
+    
+    rf_pred=rf_pred[["PassengerID","Survived"]]
+    print("The Predictions Dataframe is")
+    print(rf_pred)
+    # new_df=pd.concat([rf_pred,y_test],axis=1,join='inner')
+    rf_pred.to_csv("output.csv",index=False)
+    corr,pval=sp.stats.pearsonr(y_test,rf_pred['Survived'].head(179))
     print(f"The correlation for the Random Forest Model at  250 est is {corr}")
     cv1=cross_val_score(estimator=rf,X=x,y=y,cv=5)
     print(f"The accuracy for the random forests is  {cv1.mean()}")
 
     # gradient booster
     HXGB=HistGradientBoostingClassifier()
-    HXGB.fit(x_train,y_train)
-    preds=HXGB.predict(x_test)
-    corr,pval=sp.stats.pearsonr(y_test,preds)
+    HXGB.fit(x,y)
+    preds=HXGB.predict(test_df)
+    preds=pd.DataFrame(preds,columns=["Survived"])
+    preds["PassengerId"]=surv_col
+    preds=preds[["PassengerId","Survived"]]
+    # preds.to_csv("output.csv",index=False)
+    # corr,pval=sp.stats.pearsonr(y_test,preds)
     print(f"The correlation for the Gradient Booster is {corr}")
     cv2=cross_val_score(estimator=HXGB,X=x,y=y,cv=5)
     print(f"The accuracy for the Gradient booster is {cv2.mean()}")
