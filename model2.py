@@ -100,8 +100,8 @@ print(coore)
 # lets try it with RandomForests
 rf=RandomForestRegressor(n_estimators=200,random_state=0)
 
-rf.fit(x_train,y_train)
-predictions=rf.predict(x_valid)
+rf.fit(x,y)
+predictions=rf.predict()
 mae=mean_absolute_error(y_valid,predictions)
 print(f"The MAE is {mae}")
 predictions=pd.DataFrame(predictions,columns=["Survived"])
